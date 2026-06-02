@@ -2,7 +2,7 @@
   "name": "node-aiready",
   "version": "0.1.0",
   "private": true,
-  "description": "AI Ready Archive — a GROUNDED Node that turns a newsroom archive into AI-discoverable formats with article-by-article editorial control over what's exposed. (Scaffold; pipeline coming.)",
+  "description": "AI Ready Archive — a GROUNDED Node that turns a newsroom archive into AI-discoverable formats (clean markdown, JSON-LD, llms.txt) with article-by-article editorial control over what's exposed.",
   "type": "module",
   "main": "index.js",
   "scripts": {
@@ -11,7 +11,15 @@
     "update": "node update.mjs"
   },
   "dependencies": {
-    "@developai/grounded-node-runtime": "github:pauldevelopai/grounded-node-runtime#v0.14.0"
+    "@developai/grounded-node-runtime": "github:pauldevelopai/grounded-node-runtime#v0.14.0",
+    "dotenv": "^16.4.5",
+    "jszip": "^3.10.1",
+    "turndown": "^7.2.0"
+  },
+  "comment_dependencies": "The runtime provides both entrypoints (createServer local, createHostedServer online) and their deps (express/multer/mammoth/anthropic + lazy pg/cookie-parser/jsonwebtoken). We add: turndown (HTML→clean markdown), jszip (in-memory deploy bundle, works local + hosted). pdf-parse + word-extractor are optional (lazy-imported by lib/extract.js for PDF / legacy .doc from a Drive folder); a build without them just can't read those two formats.",
+  "optionalDependencies": {
+    "pdf-parse": "^1.1.4",
+    "word-extractor": "^1.0.4"
   },
   "license": "Apache-2.0"
 }

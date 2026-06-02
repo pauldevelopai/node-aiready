@@ -9,53 +9,164 @@
   <link rel="stylesheet" href="/grounded-chrome.css" />
   <script src="/grounded-chrome.js" defer></script>
   <style>
-    :root { --bg:#faf9f6; --fg:#1c1c1a; --muted:#6b6b66; --line:#e5e3da; --card:#fff; --accent:#1d4e8a; }
+    :root { --bg:#faf9f6; --fg:#1c1c1a; --muted:#6b6b66; --line:#e5e3da; --card:#fff; --accent:#1d4e8a; --good:#2c6b35; --warn:#8a5a00; --bad:#8a2c2c; }
     * { box-sizing: border-box; }
     html, body { margin:0; background:var(--bg); color:var(--fg); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; font-size:15px; line-height:1.55; }
-    header { padding:1.5rem 2rem 1rem; border-bottom:1px solid var(--line); }
+    header { padding:1.4rem 2rem 0; border-bottom:1px solid var(--line); }
+    header .top { display:flex; align-items:baseline; gap:1rem; }
     header h1 { margin:0; font-size:1.4rem; font-weight:600; }
-    header .subtitle { color:var(--muted); font-size:0.9rem; }
-    main { padding:1.5rem 2rem 3rem; max-width:760px; margin:0 auto; }
-    .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:1.25rem 1.5rem; margin-bottom:1rem; }
-    .card h2 { margin:0 0 0.5rem; font-size:1.05rem; font-weight:600; }
-    p.help { margin:0.25rem 0 1rem; color:var(--muted); font-size:0.9rem; }
-    label { display:block; margin:0.75rem 0 0.35rem; font-weight:500; font-size:0.9rem; }
-    textarea, input[type=text] { width:100%; padding:0.6rem 0.75rem; border:1px solid var(--line); border-radius:6px; font-family:inherit; font-size:0.95rem; background:var(--card); color:var(--fg); }
-    textarea { min-height:70px; resize:vertical; }
-    button.primary { background:var(--accent); color:#fff; border:none; padding:0.6rem 1.1rem; border-radius:6px; font-family:inherit; font-size:0.95rem; cursor:pointer; font-weight:500; }
-    button.primary:disabled { background:var(--muted); cursor:not-allowed; }
-    .item { padding:0.6rem 0; border-bottom:1px solid var(--line); }
-    .item:last-child { border-bottom:none; }
-    .item .when { font-size:0.75rem; color:var(--muted); }
-    .empty { color:var(--muted); font-style:italic; }
-    .status-line { color:var(--muted); font-size:0.9rem; }
+    header .subtitle { color:var(--muted); font-size:0.9rem; flex:1; }
     header a#key-settings { font-size:0.8rem; color:var(--accent); text-decoration:none; }
     header a#key-settings:hover { text-decoration:underline; }
+    .counts { display:flex; flex-wrap:wrap; gap:0.4rem 1.1rem; margin:0.7rem 0 0; font-size:0.82rem; color:var(--muted); }
+    .counts b { color:var(--fg); }
+    nav.tabs { display:flex; gap:0.25rem; margin-top:0.8rem; }
+    nav.tabs button { background:none; border:none; border-bottom:2px solid transparent; padding:0.55rem 0.9rem; font-family:inherit; font-size:0.92rem; color:var(--muted); cursor:pointer; }
+    nav.tabs button.active { color:var(--fg); border-bottom-color:var(--accent); font-weight:600; }
+    main { padding:1.5rem 2rem 3rem; max-width:960px; margin:0 auto; }
+    .panel { display:none; }
+    .panel.active { display:block; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:1.25rem 1.5rem; margin-bottom:1rem; }
+    .card h2 { margin:0 0 0.4rem; font-size:1.05rem; font-weight:600; }
+    .card h3 { margin:1rem 0 0.4rem; font-size:0.92rem; font-weight:600; }
+    p.help { margin:0.25rem 0 1rem; color:var(--muted); font-size:0.88rem; }
+    label { display:block; margin:0.7rem 0 0.3rem; font-weight:500; font-size:0.88rem; }
+    textarea, input[type=text], select { width:100%; padding:0.55rem 0.7rem; border:1px solid var(--line); border-radius:6px; font-family:inherit; font-size:0.92rem; background:var(--card); color:var(--fg); }
+    textarea { min-height:90px; resize:vertical; font-family:ui-monospace,Menlo,monospace; font-size:0.85rem; }
+    button.primary { background:var(--accent); color:#fff; border:none; padding:0.55rem 1rem; border-radius:6px; font-family:inherit; font-size:0.92rem; cursor:pointer; font-weight:500; }
+    button.primary:disabled { background:var(--muted); cursor:not-allowed; }
+    button.ghost { background:none; border:1px solid var(--line); color:var(--fg); padding:0.5rem 0.85rem; border-radius:6px; font-family:inherit; font-size:0.85rem; cursor:pointer; }
+    .status-line { color:var(--muted); font-size:0.88rem; }
+    .empty { color:var(--muted); font-style:italic; }
+    .badge { display:inline-block; font-size:0.7rem; padding:0.1rem 0.45rem; border-radius:10px; background:#eef0f3; color:var(--muted); margin-left:0.3rem; }
+    .badge.good{background:#e6f1e8;color:var(--good)} .badge.warn{background:#f7efe0;color:var(--warn)} .badge.bad{background:#f6e6e6;color:var(--bad)}
+    table.manifest { width:100%; border-collapse:collapse; font-size:0.82rem; }
+    table.manifest th, table.manifest td { text-align:left; padding:0.45rem 0.4rem; border-bottom:1px solid var(--line); vertical-align:top; }
+    table.manifest th { font-size:0.72rem; text-transform:uppercase; letter-spacing:0.03em; color:var(--muted); font-weight:600; }
+    table.manifest td.title { max-width:240px; }
+    table.manifest td.title a { color:var(--accent); text-decoration:none; }
+    table.manifest select { padding:0.2rem 0.3rem; font-size:0.78rem; width:auto; }
+    .togglecell { text-align:center; }
+    .result { padding:0.7rem 0; border-bottom:1px solid var(--line); }
+    .result a { color:var(--accent); text-decoration:none; font-weight:600; }
+    .result .snip { color:var(--muted); font-size:0.85rem; }
+    .crawler-row { display:flex; align-items:center; gap:1rem; padding:0.4rem 0; border-bottom:1px solid var(--line); }
+    .crawler-row .name { flex:1; font-family:ui-monospace,Menlo,monospace; font-size:0.85rem; }
+    .crawler-row label { display:inline; margin:0 0.6rem 0 0; font-weight:400; font-size:0.85rem; }
+    code { background:#f0efea; padding:0.05rem 0.3rem; border-radius:4px; font-size:0.85em; }
+    pre { background:#f0efea; padding:0.8rem; border-radius:6px; overflow:auto; font-size:0.78rem; }
+    .rule { border:1px solid var(--line); border-radius:6px; padding:0.6rem 0.8rem; margin-bottom:0.5rem; font-size:0.84rem; display:flex; gap:0.6rem; align-items:center; }
+    .rule .desc { flex:1; }
+    .inline { display:flex; gap:0.5rem; flex-wrap:wrap; align-items:end; }
+    .inline > div { flex:1; min-width:120px; }
   </style>
 </head>
 <body>
 
 <div id="app" style="display:none">
   <header>
-    <h1>AI Ready Archive</h1>
-    <div class="subtitle">A clean GROUNDED Node — copy this and build your own.</div>
-    <a href="#" id="key-settings">API key</a>
+    <div class="top">
+      <h1>AI Ready Archive</h1>
+      <span class="subtitle">Turn your archive into AI-discoverable formats — with article-by-article control.</span>
+      <a href="#" id="key-settings">API key</a>
+    </div>
+    <div class="counts" id="counts"></div>
+    <nav class="tabs" id="tabs">
+      <button data-tab="sources" class="active">Sources</button>
+      <button data-tab="manifest">Manifest</button>
+      <button data-tab="search">Search</button>
+      <button data-tab="crawlers">Crawlers</button>
+      <button data-tab="export">Export</button>
+    </nav>
   </header>
   <main>
-    <div class="card">
-      <h2>Demo: notes</h2>
-      <p class="help">This sample stores text via <code>host.store</code> — it works identically on a laptop (JSON files) and hosted (per-newsroom Postgres). Replace it with your Node's real feature (see <code>lib/routes.js</code>).</p>
-      <label for="note">Add a note</label>
-      <textarea id="note" placeholder="Type anything and save it."></textarea>
-      <div style="margin-top:0.75rem">
-        <button class="primary" id="save-btn">Save note</button>
-        <span id="save-status" class="status-line" style="margin-left:0.75rem"></span>
+
+    <!-- SOURCES -->
+    <section class="panel active" id="panel-sources">
+      <div class="card">
+        <h2>Paste article URLs</h2>
+        <p class="help">One URL per line. Each is fetched and converted to clean markdown. Already-added URLs are skipped.</p>
+        <textarea id="urls" placeholder="https://yoursite.org/story-one&#10;https://yoursite.org/story-two"></textarea>
+        <div style="margin-top:0.7rem"><button class="primary" id="ingest-urls">Add these URLs</button> <span class="status-line" id="urls-status"></span></div>
       </div>
-    </div>
-    <div class="card">
-      <h2>Your notes</h2>
-      <div id="items"><span class="status-line">Loading…</span></div>
-    </div>
+      <div class="card">
+        <h2>Crawl a sitemap</h2>
+        <p class="help">Paste your <code>sitemap.xml</code> (sitemap-index files are followed one level). Fastest way to pull a whole live site.</p>
+        <input type="text" id="sitemap" placeholder="https://yoursite.org/sitemap.xml" />
+        <div style="margin-top:0.7rem"><button class="primary" id="ingest-sitemap">Crawl sitemap</button> <span class="status-line" id="sitemap-status"></span></div>
+      </div>
+      <div class="card">
+        <h2>Connect a Google Drive folder</h2>
+        <p class="help" id="drive-help">Paste a Drive folder shared “anyone with the link”. Google Docs, DOCX and PDF are imported and converted.</p>
+        <input type="text" id="drive" placeholder="https://drive.google.com/drive/folders/…" />
+        <div style="margin-top:0.7rem"><button class="primary" id="ingest-drive">Import folder</button> <span class="status-line" id="drive-status"></span></div>
+      </div>
+    </section>
+
+    <!-- MANIFEST -->
+    <section class="panel" id="panel-manifest">
+      <div class="card">
+        <h2>Bulk rules</h2>
+        <p class="help">Set defaults across many articles at once — e.g. “category = Investigations → exclude”. Editing a single article by hand always overrides a rule. Rules are reversible; they never overwrite your manual edits.</p>
+        <div id="rules-list"></div>
+        <h3>Add a rule</h3>
+        <div class="inline">
+          <div><label>When field</label><select id="r-field"></select></div>
+          <div><label>is</label><select id="r-op"></select></div>
+          <div><label>value</label><input type="text" id="r-value" placeholder="e.g. Investigations / 30" /></div>
+          <div><label>then set</label><select id="r-then-field"></select></div>
+          <div><label>to</label><select id="r-then-value"></select></div>
+          <div style="flex:0"><button class="ghost" id="r-add">Add</button></div>
+        </div>
+        <p class="status-line" id="rule-preview"></p>
+      </div>
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:1rem">
+          <h2 style="margin:0;flex:1">Manifest</h2>
+          <button class="ghost" id="generate-btn" title="Use AI to write JSON-LD descriptions + summaries for the llms.txt index">Generate JSON-LD + summaries</button>
+          <span class="status-line" id="generate-status"></span>
+        </div>
+        <p class="help">Per article: <b>L1</b> include / exclude / local-only · <b>L2</b> the five publication toggles · <b>sensitivity</b> (any flag forces it out of all public output). A grey value means a bulk rule set it; change it to override.</p>
+        <div id="manifest-table"><span class="status-line">Loading…</span></div>
+      </div>
+    </section>
+
+    <!-- SEARCH -->
+    <section class="panel" id="panel-search">
+      <div class="card">
+        <h2>Internal archive search <span class="badge" id="search-mode"></span></h2>
+        <p class="help" id="search-help">Search your own archive. With an OpenAI key it's semantic; otherwise keyword. Withdrawn articles are never returned.</p>
+        <div style="margin-bottom:0.7rem"><button class="ghost" id="embed-btn">Build semantic index</button> <span class="status-line" id="embed-status"></span></div>
+        <input type="text" id="q" placeholder="Search the archive…" />
+        <div id="search-results" style="margin-top:0.8rem"></div>
+      </div>
+    </section>
+
+    <!-- CRAWLERS -->
+    <section class="panel" id="panel-crawlers">
+      <div class="card">
+        <h2>Site &amp; crawler policy</h2>
+        <p class="help">Used to build <code>llms.txt</code> and <code>robots.txt</code>. The crawler rules tell each AI bot what it may read (honour-system: compliant crawlers obey it).</p>
+        <label>Newsroom name</label><input type="text" id="s-name" />
+        <label>Site URL</label><input type="text" id="s-url" placeholder="https://yoursite.org" />
+        <label>One-line description (for llms.txt header)</label><input type="text" id="s-summary" />
+        <label>Mirror base path (where <code>/mirror/&lt;slug&gt;.md</code> will live)</label><input type="text" id="s-mirror" placeholder="/" />
+        <h3>AI crawlers</h3>
+        <div id="crawlers-list"></div>
+        <div style="margin-top:0.8rem"><button class="primary" id="save-settings">Save settings</button> <span class="status-line" id="settings-status"></span></div>
+      </div>
+    </section>
+
+    <!-- EXPORT -->
+    <section class="panel" id="panel-export">
+      <div class="card">
+        <h2>Export deploy bundle</h2>
+        <p class="help">A zip laid out for your own website: <code>llms.txt</code>, <code>llms-full.txt</code>, <code>robots.txt</code>, markdown mirrors and JSON-LD files, plus a README on where each goes. Only included, non-sensitive articles are in it.</p>
+        <div id="export-preview" class="status-line">Loading preview…</div>
+        <div style="margin-top:0.9rem"><button class="primary" id="download-btn">Download bundle (.zip)</button></div>
+      </div>
+    </section>
+
   </main>
 </div>
 

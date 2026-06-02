@@ -1,20 +1,36 @@
 # node-aiready — "AI Ready Archive"
 
-A GROUNDED Node (scaffolded from `node-template`). **Currently the clean generic
-base** — it runs **locally** (one-command install) AND **hosted** (multi-tenant)
-with the "notes" demo as a placeholder. The archive pipeline (manifest → markitdown
-→ JSON-LD / `llms.txt` + the four editorial control layers) is NOT built yet; see
-`NODE.md` and the concept note `node-archive-ready-concept-v1`.
+A GROUNDED Node. Runs **locally** (one-command install) AND **hosted** (multi-tenant)
+from one set of handlers. It turns a newsroom archive into AI-discoverable formats
+with article-by-article editorial control. Concept note: `node-archive-ready-concept-v1`.
 
-## What's here (and what to change)
-- **`index.js`** (LOCAL) / **`server-hosted.js`** (HOSTED) — the two entry points,
-  same handlers. Slug `aiready`, display name "AI Ready Archive".
-- **`lib/handlers.js`** — the generic standard `/api/*` handlers (`getSetupStatus`,
-  `postSetup` = the local AI-key flow; `getActivity`). Auto-mounted by the runtime.
-- **`lib/routes.js`** — `mountAppRoutes(app, getHost)`: a DEMO "items" surface
-  (`GET`/`POST /api/items` via `host.store`). **This is the bit you replace** with
-  your Node's real routes. Always go through the host interface (`host.store` /
-  `host.db` / `host.ai` / `host.log`) — never `fs`/`pg`/`express` in handlers.
+**The pipeline:** ingest (paste URLs / sitemap crawl / Google Drive folder) → convert
+to clean markdown (native-JS: turndown + mammoth + pdf-parse, NO Python/markitdown) →
+per-article control (L1 include/exclude/local-only, L2 five publication toggles,
+sensitivity flag) + reversible bulk rules → AI JSON-LD + summaries (grounded in
+`host.profile`) → semantic/keyword internal search → export a deploy-ready zip
+(`llms.txt`, `llms-full.txt`, `robots.txt`, markdown mirrors, JSON-LD) for the
+newsroom's own site. THE MANIFEST IS THE PRODUCT; conversion is the easy part.
+
+## lib/ map
+- **`index.js`** (LOCAL) / **`server-hosted.js`** (HOSTED) — entry points, same handlers,
+  same routes. Slug `aiready`.
+- **`lib/manifest.js`** — the per-article record shape + `isPublishable()` (the SINGLE
+  gate every public-output path calls: exclude/local-only/any sensitivity flag → out).
+- **`lib/store.js`** — all persistence via `host.store` (collections: `manifest`,
+  `embeddings`, `config`). Read-modify-write; never `host.db` (lite shim has no UPDATE).
+- **`lib/scrape.js`** + **`lib/extract.js`** + **`lib/convert.js`** — fetch + format-detect
+  + native-JS → clean markdown. **`lib/ingest.js`** (URLs/sitemap), **`lib/drive.js`** (Drive).
+- **`lib/rules.js`** — pure `applyRules()` (bulk rules; manual edits always win, never
+  destructively written). **`lib/jsonld.js`** (schema.org + AI fields). **`lib/embed.js`**
+  + **`lib/search.js`** (OpenAI embeddings + cosine, keyword fallback). **`lib/bundle.js`**
+  (jszip, in-memory, works local + hosted). **`lib/context.js`** (host.profile grounding).
+- **`lib/routes.js`** — `mountAppRoutes(app, getHost)`: all `/api/aiready/*` via the `wrap`
+  pattern; the bundle route streams binary outside `wrap`. Keep the no-cache app-shell mw.
+- **`lib/handlers.js`** — the standard runtime handlers (`getSetupStatus`/`postSetup` AI-key
+  flow, `getActivity`).
+- **`public/`** — tabbed dashboard (Sources/Manifest/Search/Crawlers/Export). **Relative
+  paths only.** `mountKeyUI()` is the reusable key UX. Do NOT hand-write nav.
 - **`public/`** — the dashboard. **Relative paths only** (`fetch("api/…")`,
   `<script src="app.js">`) so it works at `/` and under `/nodes/<slug>/app/`. Do
   NOT hand-write nav — `/nodes/chrome.js` injects it.
@@ -55,13 +71,20 @@ a JSON file (local), and seeded from the tracker Newsroom Profile.
   do the same in your Node.
 
 ## Storage choice
-This Node uses **`host.store`** (save/list records — simplest, no schema). If
-your Node needs relational queries, switch to `host.db` + an `ensureSchema` that
-creates `node_<slug>_*` tables (see `node-analytics` in the `nodes` repo).
+This Node uses **`host.store`** (collections `manifest` / `embeddings` / `config`).
+The manifest row is edited constantly; the lite `host.db` has no UPDATE / ON CONFLICT,
+so `host.store` (which upserts identically local + hosted) is the only correct fit
+here — do NOT move the manifest to `host.db`.
+
+## External keys (the enrich.js pattern — read process.env directly, degrade)
+- `OPENAI_API_KEY` → semantic-search embeddings (`lib/embed.js`); without it search
+  falls back to keyword (`lib/search.js`). Separate from the Anthropic chat key.
+- `GOOGLE_API_KEY` → Drive folder import (`lib/drive.js`); without it, paste URLs.
+Both are server-managed on the box, optional locally. Documented in `.env.example`.
 
 ## Deps & deploy
-`@developai/grounded-node-runtime` pinned to the current tag (check
-`package.json` — today `#v0.12.0`). To host: add the `nodes.json` entry in the
+`@developai/grounded-node-runtime` pinned `#v0.14.0` (check `package.json`). Added deps:
+`turndown` + `jszip` (deps), `pdf-parse` + `word-extractor` (optional, lazy). To host: add the `nodes.json` entry in the
 `nodes` repo, then on the box `cd /home/ubuntu/nodes && bash deploy-node.sh <slug> <port>`
 and paste the Caddy app block it prints. Downloads (`/nodes/<slug>/{mac,windows}`)
 work automatically via a generic Caddy rule. See `nodes/ADD_A_NODE.md` for the

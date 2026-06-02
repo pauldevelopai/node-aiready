@@ -1,51 +1,293 @@
 // AI Ready Archive — dashboard JS. Plain vanilla, relative API paths.
 //
-// The API-KEY UX lives in mountKeyUI() below — a self-contained component you can
-// drop into any Node's app.js: a first-run gate (no key → blocking setup) and an
-// always-available Settings modal (change/remove the key, switch provider, with
-// live validation). Nobody edits .env by hand. To reuse: copy mountKeyUI() and
-// call it once on boot.
+// mountKeyUI() (bottom) is the reusable GROUNDED key UX — copy it into any Node.
+// The rest wires the archive tabs: Sources (ingest) · Manifest (per-article control
+// + bulk rules) · Search (semantic/keyword) · Crawlers (site + robots policy) ·
+// Export (deploy bundle).
 
 (function () {
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
+  const RULE_WHEN_FIELDS = ['category', 'author', 'title', 'source_kind', 'source_format', 'published_at', 'inclusion'];
+  const RULE_OPS = ['eq', 'neq', 'contains', 'is_empty', 'within_days', 'older_than_days', 'before', 'after'];
+  const RULE_THEN_FIELDS = ['inclusion', 'out_clean_markdown', 'out_json_ld', 'out_mirror_md', 'in_llms_txt', 'in_llms_full'];
+  const TOGGLE_LABELS = { out_clean_markdown: 'Clean MD', out_json_ld: 'JSON-LD', out_mirror_md: 'Mirror .md', in_llms_txt: 'llms.txt', in_llms_full: 'llms-full' };
+  let CAPS = { drive: false, embeddings: false };
+  let MANIFEST_FIELDS = null;
+  const loaded = {};
+
   async function boot() {
-    // Always show the app; the key UI gates on top if a key is needed.
     $('#app').style.display = 'block';
-    wireApp();
-    mountKeyUI({ onConfigured: () => { /* re-enable AI features here if you gate them */ } });
+    wireTabs();
+    wireSources();
+    wireManifest();
+    wireSearch();
+    wireCrawlers();
+    wireExport();
+    await refreshStatus();
+    showTab('sources');
+    mountKeyUI({});
   }
 
-  function wireApp() {
-    $('#save-btn').addEventListener('click', saveNote);
-    loadItems();
+  // ─── Tabs ──
+  function wireTabs() {
+    $('#tabs').addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-tab]');
+      if (b) showTab(b.dataset.tab);
+    });
+  }
+  function showTab(name) {
+    $$('#tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
+    $$('.panel').forEach((p) => p.classList.toggle('active', p.id === 'panel-' + name));
+    if (name === 'manifest' && !loaded.manifest) loadManifest();
+    if (name === 'crawlers' && !loaded.crawlers) loadSettings();
+    if (name === 'export') loadExportPreview();
+    if (name === 'search') applySearchMode();
   }
 
-  // ─── Demo feature (replace with your Node's) ─────────────────────
-  async function saveNote() {
-    const ta = $('#note');
-    const text = ta.value.trim();
-    const status = $('#save-status');
-    if (!text) { status.textContent = 'Type something first.'; return; }
-    $('#save-btn').disabled = true; status.textContent = 'Saving…';
+  async function refreshStatus() {
+    const s = await fetchJson('api/aiready/status').catch(() => null);
+    if (!s) return;
+    CAPS = s.capabilities || CAPS;
+    const c = s.counts || {};
+    $('#counts').innerHTML = [
+      ['Articles', c.total], ['Converted', c.converted], ['Publishable', c.publishable],
+      ['Local-only', c.local_only], ['Excluded', c.excluded], ['Sensitive', c.sensitive],
+      ['In llms.txt', c.in_llms_txt], ['Embedded', c.embedded],
+    ].map(([k, v]) => `<span>${k}: <b>${v || 0}</b></span>`).join('');
+    // Drive affordance
+    if (!CAPS.drive) {
+      $('#drive-help').innerHTML = 'A Google API key isn’t set, so folder import is off. <b>Paste individual article URLs above instead</b>, or set <code>GOOGLE_API_KEY</code> (server-managed online).';
+      $('#ingest-drive').disabled = true;
+    }
+    applySearchMode();
+  }
+
+  function applySearchMode() {
+    const badge = $('#search-mode');
+    if (CAPS.embeddings) { badge.textContent = 'semantic'; badge.className = 'badge good'; $('#embed-btn').style.display = ''; }
+    else { badge.textContent = 'keyword'; badge.className = 'badge warn'; $('#embed-btn').style.display = 'none';
+      $('#search-help').innerHTML = 'Keyword search over your archive. Add an <code>OPENAI_API_KEY</code> to enable semantic search. Withdrawn articles are never returned.'; }
+  }
+
+  // ─── Sources ──
+  function wireSources() {
+    $('#ingest-urls').addEventListener('click', () => runIngest('#ingest-urls', '#urls-status', 'api/aiready/ingest/urls', { urls: $('#urls').value }));
+    $('#ingest-sitemap').addEventListener('click', () => runIngest('#ingest-sitemap', '#sitemap-status', 'api/aiready/ingest/sitemap', { sitemap: $('#sitemap').value.trim() }));
+    $('#ingest-drive').addEventListener('click', () => runIngest('#ingest-drive', '#drive-status', 'api/aiready/ingest/drive', { folder: $('#drive').value.trim() }));
+  }
+  async function runIngest(btnSel, statusSel, url, body) {
+    const btn = $(btnSel), status = $(statusSel);
+    btn.disabled = true; status.textContent = 'Working… (fetching + converting)';
     try {
-      const r = await postJson('api/items', { text });
-      if (!r.ok) { status.textContent = r.message || 'Could not save.'; return; }
-      ta.value = ''; status.textContent = 'Saved.';
-      loadItems();
+      const r = await postJson(url, body);
+      if (!r.ok) { status.textContent = r.message || 'Could not ingest.'; return; }
+      status.textContent = `Done — ${r.added || 0} added, ${r.updated || 0} updated, ${r.skipped || 0} skipped, ${r.failed || 0} failed.`;
+      loaded.manifest = false;
+      refreshStatus();
     } catch (e) { status.textContent = 'Network error: ' + e.message; }
-    finally { $('#save-btn').disabled = false; }
+    finally { btn.disabled = false; }
   }
 
-  async function loadItems() {
-    const box = $('#items');
-    const r = await fetchJson('api/items').catch(() => ({ items: [] }));
-    const items = r.items || [];
-    box.innerHTML = items.length
-      ? items.map((it) => `<div class="item"><div class="when">${new Date(it.created_at).toLocaleString()}</div><div>${escapeHtml(it.text)}</div></div>`).join('')
-      : '<span class="empty">No notes yet. Add the first one above.</span>';
+  // ─── Manifest ──
+  function wireManifest() {
+    fillSelect('#r-field', RULE_WHEN_FIELDS);
+    fillSelect('#r-op', RULE_OPS);
+    fillSelect('#r-then-field', RULE_THEN_FIELDS);
+    syncThenValue();
+    $('#r-then-field').addEventListener('change', syncThenValue);
+    ['#r-field', '#r-op', '#r-value'].forEach((s) => $(s).addEventListener('input', previewRule));
+    $('#r-add').addEventListener('click', addRule);
+    $('#generate-btn').addEventListener('click', generate);
   }
+  function syncThenValue() {
+    const f = $('#r-then-field').value;
+    fillSelect('#r-then-value', f === 'inclusion' ? ['include', 'exclude', 'local_only'] : ['true', 'false']);
+  }
+  async function previewRule() {
+    const when = currentWhen();
+    if (!when) { $('#rule-preview').textContent = ''; return; }
+    const r = await postJson('api/aiready/rules/preview', { when }).catch(() => null);
+    if (r && r.ok) $('#rule-preview').textContent = `This rule would match ${r.matches} article(s).`;
+  }
+  function currentWhen() {
+    const field = $('#r-field').value, op = $('#r-op').value, value = $('#r-value').value.trim();
+    if (op !== 'is_empty' && !value) return null;
+    return { field, op, value };
+  }
+  async function addRule() {
+    const when = currentWhen();
+    if (!when) { $('#rule-preview').textContent = 'Enter a value first.'; return; }
+    let v = $('#r-then-value').value;
+    if (v === 'true') v = true; else if (v === 'false') v = false;
+    const rule = { id: 'r' + Date.now() + Math.random().toString(36).slice(2, 6), when, then: { [$('#r-then-field').value]: v } };
+    const cur = (await fetchJson('api/aiready/rules')).rules || [];
+    await putJson('api/aiready/rules', { rules: [...cur, rule] });
+    $('#r-value').value = '';
+    loadManifest();
+    refreshStatus();
+  }
+  async function deleteRule(id) {
+    const cur = (await fetchJson('api/aiready/rules')).rules || [];
+    await putJson('api/aiready/rules', { rules: cur.filter((r) => r.id !== id) });
+    loadManifest(); refreshStatus();
+  }
+
+  async function loadManifest() {
+    loaded.manifest = true;
+    const [mf, rl] = await Promise.all([fetchJson('api/aiready/manifest'), fetchJson('api/aiready/rules')]);
+    MANIFEST_FIELDS = mf.fields;
+    renderRules(rl.rules || []);
+    renderManifestTable(mf.articles || []);
+  }
+
+  function renderRules(rules) {
+    const box = $('#rules-list');
+    box.innerHTML = rules.length ? rules.map((r) => {
+      const k = Object.keys(r.then || {})[0];
+      const desc = `When <b>${esc(r.when.field)}</b> ${esc(r.when.op).replace(/_/g, ' ')} ${r.when.op === 'is_empty' ? '' : '<b>' + esc(r.when.value) + '</b>'} → set <b>${esc(k)}</b> = <b>${esc(String(r.then[k]))}</b>`;
+      return `<div class="rule"><span class="desc">${desc}</span><button class="ghost" data-del="${esc(r.id)}">Remove</button></div>`;
+    }).join('') : '<span class="empty">No rules yet — articles use their own per-row settings.</span>';
+    box.querySelectorAll('button[data-del]').forEach((b) => b.addEventListener('click', () => deleteRule(b.dataset.del)));
+  }
+
+  function renderManifestTable(articles) {
+    const box = $('#manifest-table');
+    if (!articles.length) { box.innerHTML = '<span class="empty">No articles yet. Add some on the Sources tab.</span>'; return; }
+    const toggles = MANIFEST_FIELDS.toggles;
+    const head = `<tr><th>Article</th><th>Status</th><th>Include</th>${toggles.map((t) => `<th class="togglecell">${TOGGLE_LABELS[t] || t}</th>`).join('')}<th>Sensitivity</th><th></th></tr>`;
+    const rows = articles.map((a) => {
+      const eff = a._effective || {};
+      const titleCell = a.url ? `<a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.title || a.slug)}</a>` : esc(a.title || a.slug);
+      const stateBadges = [
+        a.state?.converted ? '<span class="badge good">md</span>' : '<span class="badge bad">no md</span>',
+        a.state?.jsonld ? '<span class="badge good">ld</span>' : '',
+        a.state?.embedded ? '<span class="badge">vec</span>' : '',
+        a.source_format ? `<span class="badge">${esc(a.source_format)}</span>` : '',
+      ].join('');
+      const inc = sel(`inc:${a.id}`, MANIFEST_FIELDS.inclusion, a.inclusion, ruled(eff.inclusion, a.inclusion));
+      const toggleCells = toggles.map((t) => {
+        const byRule = eff[t] !== undefined && eff[t] !== a[t];
+        return `<td class="togglecell"><input type="checkbox" data-tg="${esc(a.id)}:${t}" ${a[t] ? 'checked' : ''} title="${byRule ? 'effective: ' + eff[t] + ' (by rule)' : ''}" ${byRule ? 'style="outline:2px solid #c9b27a"' : ''}/></td>`;
+      }).join('');
+      const sens = sel(`sen:${a.id}`, MANIFEST_FIELDS.sensitivity, a.sensitivity_flag, false);
+      return `<tr><td class="title">${titleCell}${a.category ? `<div class="status-line">${esc(a.category)}</div>` : ''}</td>`
+        + `<td>${stateBadges}</td><td>${inc}</td>${toggleCells}<td>${sens}</td>`
+        + `<td><button class="ghost" data-ld="${esc(a.id)}" title="Copy JSON-LD snippet">&lt;ld&gt;</button></td></tr>`;
+    }).join('');
+    box.innerHTML = `<table class="manifest"><thead>${head}</thead><tbody>${rows}</tbody></table>`;
+
+    box.querySelectorAll('select[data-k]').forEach((s) => s.addEventListener('change', onCellChange));
+    box.querySelectorAll('input[data-tg]').forEach((c) => c.addEventListener('change', onToggleChange));
+    box.querySelectorAll('button[data-ld]').forEach((b) => b.addEventListener('click', () => copyJsonLd(b.dataset.ld)));
+  }
+  function ruled(effVal, stored) { return effVal !== undefined && effVal !== stored; }
+  function sel(key, opts, value, byRule) {
+    const id = key.split(':');
+    return `<select data-k="${id[0]}" data-id="${esc(id[1])}" ${byRule ? 'style="border-color:#c9b27a"' : ''}>`
+      + opts.map((o) => `<option value="${o}" ${o === value ? 'selected' : ''}>${o.replace(/_/g, '-')}</option>`).join('') + '</select>';
+  }
+  async function onCellChange(e) {
+    const s = e.target, kind = s.dataset.k, id = s.dataset.id;
+    const field = kind === 'inc' ? 'inclusion' : 'sensitivity_flag';
+    await putJson(`api/aiready/manifest/${id}`, { [field]: s.value });
+    refreshStatus();
+  }
+  async function onToggleChange(e) {
+    const [id, field] = e.target.dataset.tg.split(':');
+    await putJson(`api/aiready/manifest/${id}`, { [field]: e.target.checked });
+    refreshStatus();
+  }
+  async function copyJsonLd(id) {
+    const r = await fetchJson(`api/aiready/jsonld/${id}`).catch(() => null);
+    if (!r || !r.ok) { alert('Could not build JSON-LD.'); return; }
+    try { await navigator.clipboard.writeText(r.script); alert('JSON-LD snippet copied — paste it into the article\'s <head>.'); }
+    catch { prompt('Copy this JSON-LD snippet:', r.script); }
+  }
+  async function generate() {
+    if (!confirm('Use AI to write JSON-LD descriptions + llms.txt summaries for articles that need them? This uses your AI key.')) return;
+    const btn = $('#generate-btn'); btn.disabled = true; $('#generate-status').textContent = 'Generating…';
+    try {
+      const r = await postJson('api/aiready/generate', {});
+      $('#generate-status').textContent = r.ok ? `Done — ${r.done} generated, ${r.failed} failed.` : (r.message || 'Failed.');
+      loadManifest(); refreshStatus();
+    } catch (e) { $('#generate-status').textContent = 'Error: ' + e.message; }
+    finally { btn.disabled = false; }
+  }
+
+  // ─── Search ──
+  function wireSearch() {
+    $('#embed-btn').addEventListener('click', buildIndex);
+    let t; $('#q').addEventListener('input', () => { clearTimeout(t); t = setTimeout(runSearch, 300); });
+  }
+  async function buildIndex() {
+    const btn = $('#embed-btn'); btn.disabled = true; $('#embed-status').textContent = 'Embedding…';
+    try {
+      const r = await postJson('api/aiready/embed', {});
+      $('#embed-status').textContent = r.ok ? `Indexed ${r.embedded} article(s) (${r.failed} failed).` : (r.message || 'Failed.');
+      refreshStatus();
+    } catch (e) { $('#embed-status').textContent = 'Error: ' + e.message; }
+    finally { btn.disabled = false; }
+  }
+  async function runSearch() {
+    const q = $('#q').value.trim();
+    const box = $('#search-results');
+    if (!q) { box.innerHTML = ''; return; }
+    const r = await fetchJson('api/aiready/search?q=' + encodeURIComponent(q)).catch(() => null);
+    if (!r || !r.results) { box.innerHTML = '<span class="empty">Search failed.</span>'; return; }
+    $('#search-mode').textContent = r.mode; $('#search-mode').className = 'badge ' + (r.mode === 'semantic' ? 'good' : 'warn');
+    box.innerHTML = r.results.length ? r.results.map((x) =>
+      `<div class="result">${x.url ? `<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.title)}</a>` : esc(x.title)}
+       <span class="badge">${x.inclusion}</span>${x.category ? `<span class="badge">${esc(x.category)}</span>` : ''}
+       <div class="snip">${esc(x.snippet)}</div></div>`).join('')
+      : '<span class="empty">No matches.</span>';
+  }
+
+  // ─── Crawlers / site settings ──
+  function wireCrawlers() { $('#save-settings').addEventListener('click', saveSettings); }
+  async function loadSettings() {
+    loaded.crawlers = true;
+    const r = await fetchJson('api/aiready/site-settings');
+    const s = r.settings || {};
+    $('#s-name').value = s.newsroom_name || ''; $('#s-url').value = s.site_url || '';
+    $('#s-summary').value = s.llms_summary || ''; $('#s-mirror').value = s.mirror_base || '/';
+    const crawlers = (r.crawlers || []).concat(['*']);
+    $('#crawlers-list').innerHTML = crawlers.map((bot) => {
+      const v = (s.crawlers && s.crawlers[bot]) || 'allow';
+      return `<div class="crawler-row"><span class="name">${esc(bot)}</span>
+        <label><input type="radio" name="cr-${esc(bot)}" value="allow" ${v === 'allow' ? 'checked' : ''}/> allow</label>
+        <label><input type="radio" name="cr-${esc(bot)}" value="disallow" ${v === 'disallow' ? 'checked' : ''}/> disallow</label></div>`;
+    }).join('');
+    $('#crawlers-list').dataset.bots = JSON.stringify(crawlers);
+  }
+  async function saveSettings() {
+    const bots = JSON.parse($('#crawlers-list').dataset.bots || '[]');
+    const crawlers = {};
+    bots.forEach((bot) => { const sel = document.querySelector(`input[name="cr-${cssEsc(bot)}"]:checked`); crawlers[bot] = sel ? sel.value : 'allow'; });
+    const settings = { newsroom_name: $('#s-name').value.trim(), site_url: $('#s-url').value.trim(), llms_summary: $('#s-summary').value.trim(), mirror_base: $('#s-mirror').value.trim() || '/', crawlers };
+    $('#settings-status').textContent = 'Saving…';
+    const r = await putJson('api/aiready/site-settings', { settings });
+    $('#settings-status').textContent = r.ok ? 'Saved.' : 'Failed.';
+  }
+
+  // ─── Export ──
+  function wireExport() { $('#download-btn').addEventListener('click', () => { window.location = 'api/aiready/bundle'; }); }
+  async function loadExportPreview() {
+    const r = await fetchJson('api/aiready/bundle/preview').catch(() => null);
+    if (!r || !r.ok) { $('#export-preview').textContent = 'Could not load preview.'; return; }
+    const c = r.counts;
+    $('#export-preview').innerHTML = `Bundle will contain: <b>${c.mirror}</b> markdown mirror(s), <b>${c.jsonld}</b> JSON-LD file(s), `
+      + `<b>${c.in_llms_txt}</b> in llms.txt, <b>${c.in_llms_full}</b> in llms-full.txt — from <b>${r.publishable}</b> publishable article(s).`;
+  }
+
+  // ─── small helpers ──
+  function fillSelect(sel, opts) { $(sel).innerHTML = opts.map((o) => `<option value="${o}">${o.replace(/_/g, ' ')}</option>`).join(''); }
+  async function fetchJson(url) { const r = await fetch(url); return r.json(); }
+  async function postJson(url, body) { const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); return r.json(); }
+  async function putJson(url, body) { const r = await fetch(url, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); return r.json(); }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+  function cssEsc(s) { return String(s).replace(/[^a-zA-Z0-9_-]/g, '\\$&'); }
 
   // ─── Reusable API-key UX (copy this whole function into any Node) ──
   function mountKeyUI(opts = {}) {
@@ -53,7 +295,6 @@
                         openai:    { label: 'OpenAI (GPT)',       link: 'https://platform.openai.com/api-keys', hint: 'sk-…' } };
     let picked = 'anthropic';
 
-    // One-time styles + DOM
     const style = document.createElement('style');
     style.textContent = `
       #gk-ov{position:fixed;inset:0;background:rgba(20,20,18,.45);display:none;align-items:center;justify-content:center;z-index:9999;padding:1rem}
@@ -163,24 +404,14 @@
       setTimeout(() => el('gk-key') && el('gk-key').focus(), 50);
     }
 
-    // Wire a settings trigger if the page has one.
     const trigger = document.getElementById('key-settings');
     if (trigger) trigger.addEventListener('click', (e) => { e.preventDefault(); open('settings'); });
 
-    // First-run gate: no key + not server-managed → require one now.
     fetchJson('api/setup').then((s) => {
       if (s && !s.configured && !s.serverManaged) open('required');
       else if (typeof opts.onConfigured === 'function') opts.onConfigured();
     }).catch(() => {});
   }
-
-  // ─── Helpers ──
-  async function fetchJson(url) { const r = await fetch(url); return r.json(); }
-  async function postJson(url, body) {
-    const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-    return r.json();
-  }
-  function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
   boot();
 })();
