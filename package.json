@@ -1,0 +1,17 @@
+{
+  "name": "node-aiready",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI Ready Archive — a GROUNDED Node that turns a newsroom archive into AI-discoverable formats with article-by-article editorial control over what's exposed. (Scaffold; pipeline coming.)",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "start:hosted": "node server-hosted.js",
+    "update": "node update.mjs"
+  },
+  "dependencies": {
+    "@developai/grounded-node-runtime": "github:pauldevelopai/grounded-node-runtime#v0.14.0"
+  },
+  "license": "Apache-2.0"
+}
