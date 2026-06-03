@@ -134,7 +134,14 @@
     <!-- SEARCH -->
     <section class="panel" id="panel-search">
       <div class="card">
-        <h2>Internal archive search <span class="badge" id="search-mode"></span></h2>
+        <h2>Ask the archive</h2>
+        <p class="help">Ask a question in plain language. The node finds the most relevant articles you've added and <b>Claude answers from them, citing each source</b> — grounded only in your own reporting. (Retrieval uses the same index as search below.)</p>
+        <input type="text" id="ask-q" placeholder="e.g. What have we reported about water tariffs?" />
+        <div style="margin-top:0.7rem"><button class="primary" id="ask-btn">Ask</button> <span class="status-line" id="ask-status"></span></div>
+        <div id="ask-answer" style="margin-top:0.9rem"></div>
+      </div>
+      <div class="card">
+        <h2>Search the archive <span class="badge" id="search-mode"></span></h2>
         <p class="help" id="search-help">Search your own archive. With an OpenAI key it's semantic; otherwise keyword. Withdrawn articles are never returned.</p>
         <div style="margin-bottom:0.7rem"><button class="ghost" id="embed-btn">Build semantic index</button> <span class="status-line" id="embed-status"></span></div>
         <input type="text" id="q" placeholder="Search the archive…" />

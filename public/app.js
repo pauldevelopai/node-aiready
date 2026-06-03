@@ -216,10 +216,36 @@
     finally { btn.disabled = false; }
   }
 
-  // ─── Search ──
+  // ─── Search + Ask (RAG) ──
   function wireSearch() {
     $('#embed-btn').addEventListener('click', buildIndex);
     let t; $('#q').addEventListener('input', () => { clearTimeout(t); t = setTimeout(runSearch, 300); });
+    $('#ask-btn').addEventListener('click', askArchive);
+    $('#ask-q').addEventListener('keydown', (e) => { if (e.key === 'Enter') askArchive(); });
+  }
+  async function askArchive() {
+    const q = $('#ask-q').value.trim();
+    const ans = $('#ask-answer');
+    if (!q) { ans.innerHTML = ''; return; }
+    const btn = $('#ask-btn'); btn.disabled = true; $('#ask-status').textContent = 'Reading the archive…'; ans.innerHTML = '';
+    try {
+      const r = await postJson('api/aiready/ask', { q });
+      $('#ask-status').textContent = r.ok ? '' : (r.message || 'Could not answer.');
+      if (!r.ok) return;
+      const sources = r.sources || [];
+      // Turn [n] citations into links to the matching source.
+      const body = esc(r.answer).replace(/\[(\d+)\]/g, (m, n) => {
+        const s = sources[Number(n) - 1];
+        return s && s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener" title="${esc(s.title)}">[${n}]</a>` : `[${n}]`;
+      });
+      const srcList = sources.length
+        ? '<div class="status-line" style="margin-top:0.7rem"><b>Sources</b></div>'
+          + sources.map((s) => `<div class="result" style="padding:0.4rem 0">[${s.n}] ${s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title)}</a>` : esc(s.title)}${s.published_at ? ` <span class="status-line">${esc(s.published_at.slice(0, 10))}</span>` : ''}</div>`).join('')
+        : '';
+      ans.innerHTML = `<div class="card" style="margin:0;background:#f7f9fc"><div style="white-space:pre-wrap">${body}</div>${srcList}`
+        + `<div class="status-line" style="margin-top:0.6rem">Answered by Claude from ${sources.length} source(s) · ${esc(r.mode)} retrieval</div></div>`;
+    } catch (e) { $('#ask-status').textContent = 'Error: ' + e.message; }
+    finally { btn.disabled = false; }
   }
   async function buildIndex() {
     const btn = $('#embed-btn'); btn.disabled = true; $('#embed-status').textContent = 'Embedding…';
