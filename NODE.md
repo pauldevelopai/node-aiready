@@ -23,9 +23,9 @@
   local-only / any sensitivity flag are forced out of every public artefact. Every
   output path calls it.
 - **Hosted:** code is hosted-ready (all data via `host.store`, routes under
-  `/api/aiready/*`, bundle streamed in-memory). Not yet deployed on the box — front
-  door is "soon" until the box gets the two keys + `deploy-node.sh aiready <port>`.
+  `/api/aiready/*`, bundle streamed in-memory). **Live on the box** as pm2
+  `aiready-hosted`, reached at `/nodes/aiready/app/`; registry status `live`.
 
-**Status:** pipeline built and verified locally end-to-end (ingest → convert →
-manifest control → bundle, with the sensitivity gate holding). AI generate +
-semantic embeddings need an AI / OpenAI key to exercise.
+**Status:** live in production (ingest → convert → manifest control → bundle, with
+the sensitivity gate holding). AI generate + semantic embeddings run on the
+server-managed keys on the box (`ANTHROPIC_API_KEY` + `OPENAI_API_KEY`).
