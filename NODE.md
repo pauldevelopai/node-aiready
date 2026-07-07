@@ -8,8 +8,10 @@
   `config` (`site_settings`, `bulk_rules`). Editors toggle rows constantly and the
   lite `host.db` has no UPDATE/ON CONFLICT, so `host.store` is the right fit.
 - **What it does:** turn a newsroom archive into AI-discoverable formats with
-  article-by-article control. Ingest via pasted URLs, a sitemap.xml crawl, or a
-  shared Google Drive folder → convert to clean markdown (native-JS: turndown /
+  article-by-article control. Ingest via a folder / files uploaded from the
+  computer (`lib/upload.js`, `source_kind:'upload'` — the hosted answer to "a
+  directory on my machine"), pasted URLs, a sitemap.xml crawl, or a shared Google
+  Drive folder → convert to clean markdown (native-JS: turndown /
   mammoth / pdf-parse) → set per-article L1 (include/exclude/local-only), L2 (the
   five publication toggles) and a sensitivity flag → AI writes JSON-LD + summaries
   (grounded in `host.profile`) → semantic/keyword internal search → export a
@@ -24,7 +26,11 @@
   output path calls it.
 - **Hosted:** code is hosted-ready (all data via `host.store`, routes under
   `/api/aiready/*`, bundle streamed in-memory). **Live on the box** as pm2
-  `aiready-hosted`, reached at `/nodes/aiready/app/`; registry status `live`.
+  `aiready-hosted` on **localhost:3006**, reached at `/nodes/aiready/app/`;
+  registry status `live`. Routed on BOTH hosts via the shared `@aiready` Caddy
+  matcher in `ailegal.co.za.caddy` (`host grounded.developai.co.za
+  beaiready.developai.co.za …`) — one process, two storefronts (products
+  `['grounded','bair']`).
 
 **Status:** live in production (ingest → convert → manifest control → bundle, with
 the sensitivity gate holding). AI generate + semantic embeddings run on the
