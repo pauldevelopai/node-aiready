@@ -124,7 +124,7 @@
     <section class="panel" id="panel-manifest">
       <div class="card">
         <h2>Bulk rules</h2>
-        <p class="help">Set defaults across many articles at once — e.g. “category = Investigations → exclude”. Editing a single article by hand always overrides a rule. Rules are reversible; they never overwrite your manual edits.</p>
+        <p class="help">Set defaults across many documents at once — e.g. “category = Internal → exclude”. Editing a single document by hand always overrides a rule. Rules are reversible; they never overwrite your manual edits.</p>
         <div id="rules-list"></div>
         <h3>Add a rule</h3>
         <div class="inline">
@@ -143,7 +143,7 @@
           <button class="ghost" id="generate-btn" title="Use AI to write JSON-LD descriptions + summaries for the llms.txt index">Generate JSON-LD + summaries</button>
           <span class="status-line" id="generate-status"></span>
         </div>
-        <p class="help">Per article: <b>L1</b> include / exclude / local-only · <b>L2</b> the five publication toggles · <b>sensitivity</b> (any flag forces it out of all public output). A grey value means a bulk rule set it; change it to override.</p>
+        <p class="help">Per document: <b>L1</b> include / exclude / local-only · <b>L2</b> the five publication toggles · <b>sensitivity</b> (any flag forces it out of all public output). A grey value means a bulk rule set it; change it to override.</p>
         <div id="manifest-table"><span class="status-line">Loading…</span></div>
       </div>
     </section>
@@ -152,14 +152,14 @@
     <section class="panel" id="panel-search">
       <div class="card">
         <h2>Ask the archive</h2>
-        <p class="help">Ask a question in plain language. The node finds the most relevant articles you've added and <b>Claude answers from them, citing each source</b> — grounded only in your own reporting. (Retrieval uses the same index as search below.)</p>
+        <p class="help">Ask a question in plain language. The node finds the most relevant documents you've added and <b>Claude answers from them, citing each source</b> — grounded only in your own content. (Retrieval uses the same index as search below.)</p>
         <input type="text" id="ask-q" placeholder="e.g. What have we reported about water tariffs?" />
         <div style="margin-top:0.7rem"><button class="primary" id="ask-btn">Ask</button> <span class="status-line" id="ask-status"></span></div>
         <div id="ask-answer" style="margin-top:0.9rem"></div>
       </div>
       <div class="card">
         <h2>Search the archive <span class="badge" id="search-mode"></span></h2>
-        <p class="help" id="search-help">Search your own archive. With an OpenAI key it's semantic; otherwise keyword. Withdrawn articles are never returned.</p>
+        <p class="help" id="search-help">Search your own documents. With an OpenAI key it's semantic; otherwise keyword. Withdrawn documents are never returned.</p>
         <div style="margin-bottom:0.7rem"><button class="ghost" id="embed-btn">Build semantic index</button> <span class="status-line" id="embed-status"></span></div>
         <input type="text" id="q" placeholder="Search the archive…" />
         <div id="search-results" style="margin-top:0.8rem"></div>
@@ -185,7 +185,7 @@
     <section class="panel" id="panel-export">
       <div class="card">
         <h2>Export deploy bundle</h2>
-        <p class="help">A zip laid out for your own website: <code>llms.txt</code>, <code>llms-full.txt</code>, <code>robots.txt</code>, markdown mirrors and JSON-LD files, plus a README on where each goes. Only included, non-sensitive articles are in it.</p>
+        <p class="help">A zip laid out for your own website: <code>llms.txt</code>, <code>llms-full.txt</code>, <code>robots.txt</code>, markdown mirrors and JSON-LD files, plus a README on where each goes. Only included, non-sensitive documents are in it.</p>
         <div id="export-preview" class="status-line">Loading preview…</div>
         <div style="margin-top:0.9rem"><button class="primary" id="download-btn">Download bundle (.zip)</button></div>
       </div>

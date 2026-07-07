@@ -58,7 +58,7 @@
     ].map(([k, v]) => `<span>${k}: <b>${v || 0}</b></span>`).join('');
     // Drive affordance
     if (!CAPS.drive) {
-      $('#drive-help').innerHTML = 'A Google API key isn’t set, so folder import is off. <b>Paste individual article URLs above instead</b>, or set <code>GOOGLE_API_KEY</code> (server-managed online).';
+      $('#drive-help').innerHTML = 'A Google API key isn’t set, so folder import is off. <b>Upload a folder or paste page URLs above instead</b>, or set <code>GOOGLE_API_KEY</code> (server-managed online).';
       $('#ingest-drive').disabled = true;
     }
     applySearchMode();
@@ -68,7 +68,7 @@
     const badge = $('#search-mode');
     if (CAPS.embeddings) { badge.textContent = 'semantic'; badge.className = 'badge good'; $('#embed-btn').style.display = ''; }
     else { badge.textContent = 'keyword'; badge.className = 'badge warn'; $('#embed-btn').style.display = 'none';
-      $('#search-help').innerHTML = 'Keyword search over your archive. Add an <code>OPENAI_API_KEY</code> to enable semantic search. Withdrawn articles are never returned.'; }
+      $('#search-help').innerHTML = 'Keyword search over your documents. Add an <code>OPENAI_API_KEY</code> to enable semantic search. Withdrawn documents are never returned.'; }
   }
 
   // ─── Sources ──
@@ -106,7 +106,7 @@
       PICKED.forEach((f) => fd.append('files', f, f.name));
       const r = await fetch('api/aiready/ingest/upload', { method: 'POST', body: fd }).then((x) => x.json());
       if (!r.ok) { status.textContent = r.message || 'Could not add those files.'; return; }
-      status.textContent = `Done — ${r.added || 0} added, ${r.updated || 0} updated, ${r.skipped || 0} skipped, ${r.failed || 0} failed.`;
+      status.textContent = `Done — ${r.added || 0} added, ${r.updated || 0} updated, ${r.skipped || 0} skipped, ${r.failed || 0} failed${r.embedded ? `, ${r.embedded} indexed for search` : ''}.`;
       setPicked([]);
       loaded.manifest = false;
       refreshStatus();
@@ -119,7 +119,7 @@
     try {
       const r = await postJson(url, body);
       if (!r.ok) { status.textContent = r.message || 'Could not ingest.'; return; }
-      status.textContent = `Done — ${r.added || 0} added, ${r.updated || 0} updated, ${r.skipped || 0} skipped, ${r.failed || 0} failed.`;
+      status.textContent = `Done — ${r.added || 0} added, ${r.updated || 0} updated, ${r.skipped || 0} skipped, ${r.failed || 0} failed${r.embedded ? `, ${r.embedded} indexed for search` : ''}.`;
       loaded.manifest = false;
       refreshStatus();
     } catch (e) { status.textContent = 'Network error: ' + e.message; }
@@ -145,7 +145,7 @@
     const when = currentWhen();
     if (!when) { $('#rule-preview').textContent = ''; return; }
     const r = await postJson('api/aiready/rules/preview', { when }).catch(() => null);
-    if (r && r.ok) $('#rule-preview').textContent = `This rule would match ${r.matches} article(s).`;
+    if (r && r.ok) $('#rule-preview').textContent = `This rule would match ${r.matches} document(s).`;
   }
   function currentWhen() {
     const field = $('#r-field').value, op = $('#r-op').value, value = $('#r-value').value.trim();
@@ -184,7 +184,7 @@
       const k = Object.keys(r.then || {})[0];
       const desc = `When <b>${esc(r.when.field)}</b> ${esc(r.when.op).replace(/_/g, ' ')} ${r.when.op === 'is_empty' ? '' : '<b>' + esc(r.when.value) + '</b>'} → set <b>${esc(k)}</b> = <b>${esc(String(r.then[k]))}</b>`;
       return `<div class="rule"><span class="desc">${desc}</span><button class="ghost" data-del="${esc(r.id)}">Remove</button></div>`;
-    }).join('') : '<span class="empty">No rules yet — articles use their own per-row settings.</span>';
+    }).join('') : '<span class="empty">No rules yet — documents use their own per-row settings.</span>';
     box.querySelectorAll('button[data-del]').forEach((b) => b.addEventListener('click', () => deleteRule(b.dataset.del)));
   }
 
@@ -192,7 +192,7 @@
     const box = $('#manifest-table');
     if (!articles.length) { box.innerHTML = '<span class="empty">Nothing added yet. Add a folder, files, URLs or a Drive folder on the Sources tab.</span>'; return; }
     const toggles = MANIFEST_FIELDS.toggles;
-    const head = `<tr><th>Article</th><th>Status</th><th>Include</th>${toggles.map((t) => `<th class="togglecell">${TOGGLE_LABELS[t] || t}</th>`).join('')}<th>Sensitivity</th><th></th></tr>`;
+    const head = `<tr><th>Document</th><th>Status</th><th>Include</th>${toggles.map((t) => `<th class="togglecell">${TOGGLE_LABELS[t] || t}</th>`).join('')}<th>Sensitivity</th><th></th></tr>`;
     const rows = articles.map((a) => {
       const eff = a._effective || {};
       const titleCell = a.url ? `<a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.title || a.slug)}</a>` : esc(a.title || a.slug);
@@ -238,11 +238,11 @@
   async function copyJsonLd(id) {
     const r = await fetchJson(`api/aiready/jsonld/${id}`).catch(() => null);
     if (!r || !r.ok) { alert('Could not build JSON-LD.'); return; }
-    try { await navigator.clipboard.writeText(r.script); alert('JSON-LD snippet copied — paste it into the article\'s <head>.'); }
+    try { await navigator.clipboard.writeText(r.script); alert('JSON-LD snippet copied — paste it into the page\'s <head>.'); }
     catch { prompt('Copy this JSON-LD snippet:', r.script); }
   }
   async function generate() {
-    if (!confirm('Use AI to write JSON-LD descriptions + llms.txt summaries for articles that need them? This uses your AI key.')) return;
+    if (!confirm('Use AI to write JSON-LD descriptions + llms.txt summaries for documents that need them? This uses your AI key.')) return;
     const btn = $('#generate-btn'); btn.disabled = true; $('#generate-status').textContent = 'Generating…';
     try {
       const r = await postJson('api/aiready/generate', {});
@@ -287,7 +287,7 @@
     const btn = $('#embed-btn'); btn.disabled = true; $('#embed-status').textContent = 'Embedding…';
     try {
       const r = await postJson('api/aiready/embed', {});
-      $('#embed-status').textContent = r.ok ? `Indexed ${r.embedded} article(s) (${r.failed} failed).` : (r.message || 'Failed.');
+      $('#embed-status').textContent = r.ok ? `Indexed ${r.embedded} document(s) (${r.failed} failed).` : (r.message || 'Failed.');
       refreshStatus();
     } catch (e) { $('#embed-status').textContent = 'Error: ' + e.message; }
     finally { btn.disabled = false; }
@@ -340,7 +340,7 @@
     if (!r || !r.ok) { $('#export-preview').textContent = 'Could not load preview.'; return; }
     const c = r.counts;
     $('#export-preview').innerHTML = `Bundle will contain: <b>${c.mirror}</b> markdown mirror(s), <b>${c.jsonld}</b> JSON-LD file(s), `
-      + `<b>${c.in_llms_txt}</b> in llms.txt, <b>${c.in_llms_full}</b> in llms-full.txt — from <b>${r.publishable}</b> publishable article(s).`;
+      + `<b>${c.in_llms_txt}</b> in llms.txt, <b>${c.in_llms_full}</b> in llms-full.txt — from <b>${r.publishable}</b> publishable document(s).`;
   }
 
   // ─── small helpers ──
