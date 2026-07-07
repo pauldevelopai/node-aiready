@@ -59,6 +59,8 @@
     .rule .desc { flex:1; }
     .inline { display:flex; gap:0.5rem; flex-wrap:wrap; align-items:end; }
     .inline > div { flex:1; min-width:120px; }
+    .dropzone { border:1.5px dashed var(--line); border-radius:8px; padding:1.3rem 1rem; text-align:center; color:var(--muted); background:#fcfbf8; transition:border-color .15s,background .15s; }
+    .dropzone.over { border-color:var(--accent); background:#eef3f8; }
   </style>
 </head>
 <body>
@@ -67,7 +69,7 @@
   <header>
     <div class="top">
       <h1>AI Ready Archive</h1>
-      <span class="subtitle">Turn your archive into AI-discoverable formats — with article-by-article control.</span>
+      <span class="subtitle">Turn your documents and pages into clean, AI-ready data — with page-by-page control over what's exposed.</span>
       <a href="#" id="key-settings">API key</a>
     </div>
     <div class="counts" id="counts"></div>
@@ -84,9 +86,24 @@
     <!-- SOURCES -->
     <section class="panel active" id="panel-sources">
       <div class="card">
-        <h2>Paste article URLs</h2>
-        <p class="help">One URL per line. Each is fetched and converted to clean markdown. Already-added URLs are skipped.</p>
-        <textarea id="urls" placeholder="https://yoursite.org/story-one&#10;https://yoursite.org/story-two"></textarea>
+        <h2>Add a folder or files from your computer</h2>
+        <p class="help">Choose a whole folder — or drag documents in. PDF, Word (.docx/.doc), HTML, Markdown and text are read in code, cleaned to tidy markdown, and added below. Your files are processed here and never leave this tool except as the clean output you choose to export.</p>
+        <div id="dropzone" class="dropzone">
+          <p style="margin:0 0 0.6rem">Drag a folder or files here, or</p>
+          <div class="inline" style="justify-content:center">
+            <button class="ghost" id="pick-folder" type="button">Choose a folder…</button>
+            <button class="ghost" id="pick-files" type="button">Choose files…</button>
+          </div>
+          <input type="file" id="file-folder" webkitdirectory directory multiple hidden />
+          <input type="file" id="file-files" multiple hidden />
+          <p class="status-line" id="upload-picked" style="margin-top:0.6rem"></p>
+        </div>
+        <div style="margin-top:0.7rem"><button class="primary" id="ingest-upload" disabled>Add these documents</button> <span class="status-line" id="upload-status"></span></div>
+      </div>
+      <div class="card">
+        <h2>Paste web page URLs</h2>
+        <p class="help">One URL per line. Each page is fetched and converted to clean markdown. Already-added URLs are skipped.</p>
+        <textarea id="urls" placeholder="https://yoursite.org/page-one&#10;https://yoursite.org/page-two"></textarea>
         <div style="margin-top:0.7rem"><button class="primary" id="ingest-urls">Add these URLs</button> <span class="status-line" id="urls-status"></span></div>
       </div>
       <div class="card">
@@ -154,7 +171,7 @@
       <div class="card">
         <h2>Site &amp; crawler policy</h2>
         <p class="help">Used to build <code>llms.txt</code> and <code>robots.txt</code>. The crawler rules tell each AI bot what it may read (honour-system: compliant crawlers obey it).</p>
-        <label>Newsroom name</label><input type="text" id="s-name" />
+        <label>Organisation name</label><input type="text" id="s-name" />
         <label>Site URL</label><input type="text" id="s-url" placeholder="https://yoursite.org" />
         <label>One-line description (for llms.txt header)</label><input type="text" id="s-summary" />
         <label>Mirror base path (where <code>/mirror/&lt;slug&gt;.md</code> will live)</label><input type="text" id="s-mirror" placeholder="/" />

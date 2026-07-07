@@ -52,7 +52,7 @@
     CAPS = s.capabilities || CAPS;
     const c = s.counts || {};
     $('#counts').innerHTML = [
-      ['Articles', c.total], ['Converted', c.converted], ['Publishable', c.publishable],
+      ['Documents', c.total], ['Converted', c.converted], ['Publishable', c.publishable],
       ['Local-only', c.local_only], ['Excluded', c.excluded], ['Sensitive', c.sensitive],
       ['In llms.txt', c.in_llms_txt], ['Embedded', c.embedded],
     ].map(([k, v]) => `<span>${k}: <b>${v || 0}</b></span>`).join('');
@@ -73,9 +73,45 @@
 
   // ─── Sources ──
   function wireSources() {
+    wireUpload();
     $('#ingest-urls').addEventListener('click', () => runIngest('#ingest-urls', '#urls-status', 'api/aiready/ingest/urls', { urls: $('#urls').value }));
     $('#ingest-sitemap').addEventListener('click', () => runIngest('#ingest-sitemap', '#sitemap-status', 'api/aiready/ingest/sitemap', { sitemap: $('#sitemap').value.trim() }));
     $('#ingest-drive').addEventListener('click', () => runIngest('#ingest-drive', '#drive-status', 'api/aiready/ingest/drive', { folder: $('#drive').value.trim() }));
+  }
+
+  // Upload a folder / files from the user's computer (multipart → /ingest/upload).
+  let PICKED = [];
+  function wireUpload() {
+    const folder = $('#file-folder'), files = $('#file-files'), dz = $('#dropzone');
+    $('#pick-folder').addEventListener('click', () => folder.click());
+    $('#pick-files').addEventListener('click', () => files.click());
+    folder.addEventListener('change', () => setPicked(folder.files));
+    files.addEventListener('change', () => setPicked(files.files));
+    ['dragover', 'dragenter'].forEach((ev) => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.add('over'); }));
+    ['dragleave', 'drop'].forEach((ev) => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.remove('over'); }));
+    dz.addEventListener('drop', (e) => { if (e.dataTransfer?.files?.length) setPicked(e.dataTransfer.files); });
+    $('#ingest-upload').addEventListener('click', uploadPicked);
+  }
+  function setPicked(fileList) {
+    PICKED = Array.from(fileList || []);
+    $('#upload-picked').textContent = PICKED.length ? `${PICKED.length} file(s) selected.` : '';
+    $('#ingest-upload').disabled = !PICKED.length;
+  }
+  async function uploadPicked() {
+    if (!PICKED.length) return;
+    const btn = $('#ingest-upload'), status = $('#upload-status');
+    btn.disabled = true; status.textContent = `Uploading + converting ${PICKED.length} file(s)…`;
+    try {
+      const fd = new FormData();
+      PICKED.forEach((f) => fd.append('files', f, f.name));
+      const r = await fetch('api/aiready/ingest/upload', { method: 'POST', body: fd }).then((x) => x.json());
+      if (!r.ok) { status.textContent = r.message || 'Could not add those files.'; return; }
+      status.textContent = `Done — ${r.added || 0} added, ${r.updated || 0} updated, ${r.skipped || 0} skipped, ${r.failed || 0} failed.`;
+      setPicked([]);
+      loaded.manifest = false;
+      refreshStatus();
+    } catch (e) { status.textContent = 'Network error: ' + e.message; }
+    finally { btn.disabled = !PICKED.length; }
   }
   async function runIngest(btnSel, statusSel, url, body) {
     const btn = $(btnSel), status = $(statusSel);
@@ -154,7 +190,7 @@
 
   function renderManifestTable(articles) {
     const box = $('#manifest-table');
-    if (!articles.length) { box.innerHTML = '<span class="empty">No articles yet. Add some on the Sources tab.</span>'; return; }
+    if (!articles.length) { box.innerHTML = '<span class="empty">Nothing added yet. Add a folder, files, URLs or a Drive folder on the Sources tab.</span>'; return; }
     const toggles = MANIFEST_FIELDS.toggles;
     const head = `<tr><th>Article</th><th>Status</th><th>Include</th>${toggles.map((t) => `<th class="togglecell">${TOGGLE_LABELS[t] || t}</th>`).join('')}<th>Sensitivity</th><th></th></tr>`;
     const rows = articles.map((a) => {
